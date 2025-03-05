@@ -1,3 +1,4 @@
+
 // This is a simplified implementation for Gemini API integration
 // In a production environment, API calls should be made through a backend service
 
@@ -11,6 +12,19 @@ class GeminiService {
 
   configure(config: GeminiServiceConfig) {
     this.apiKey = config.apiKey;
+    // Save to localStorage for persistence
+    localStorage.setItem('geminiApiKey', config.apiKey);
+    return true;
+  }
+
+  // Initialize the service with a saved API key if available
+  initialize(): boolean {
+    const savedApiKey = localStorage.getItem('geminiApiKey');
+    if (savedApiKey) {
+      this.apiKey = savedApiKey;
+      return true;
+    }
+    return false;
   }
 
   async generateTravelPlan(prompt: string): Promise<string> {
@@ -184,6 +198,13 @@ What destinations are you most interested in? Or what type of experience are you
   isConfigured(): boolean {
     return this.apiKey !== null;
   }
+
+  clearApiKey(): void {
+    this.apiKey = null;
+    localStorage.removeItem('geminiApiKey');
+  }
 }
 
 export const geminiService = new GeminiService();
+// Initialize with saved API key if available
+geminiService.initialize();

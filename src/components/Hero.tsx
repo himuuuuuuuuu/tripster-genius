@@ -2,9 +2,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Key } from 'lucide-react';
+import { geminiService } from '@/utils/geminiService';
 
 const Hero: React.FC = () => {
+  const apiConfigured = geminiService.isConfigured();
+  
   return (
     <div className="relative w-full py-16 md:py-24 flex flex-col items-center justify-center text-center overflow-hidden">
       <motion.div
@@ -27,6 +30,7 @@ const Hero: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <Button 
             className="bg-travel-600 hover:bg-travel-700 text-white" 
@@ -35,6 +39,18 @@ const Hero: React.FC = () => {
           >
             Plan My Trip <ArrowRight className="ml-2" size={16} />
           </Button>
+          
+          {!apiConfigured && (
+            <Button 
+              variant="outline"
+              size="lg"
+              className="border-travel-600 text-travel-600 hover:bg-travel-50"
+              onClick={() => document.getElementById('api-key-section')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <Key className="mr-2" size={16} />
+              Configure API Key
+            </Button>
+          )}
         </motion.div>
         
         <div className="w-24 h-1 bg-gradient-to-r from-travel-400 to-travel-600 mx-auto rounded-full mt-8" />
