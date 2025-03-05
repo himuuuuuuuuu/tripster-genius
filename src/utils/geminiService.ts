@@ -1,4 +1,3 @@
-
 // This is a simplified implementation for Gemini API integration
 // In a production environment, API calls should be made through a backend service
 
@@ -8,7 +7,7 @@ interface GeminiServiceConfig {
 
 class GeminiService {
   private apiKey: string | null = null;
-  private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
   configure(config: GeminiServiceConfig) {
     this.apiKey = config.apiKey;
@@ -30,7 +29,7 @@ class GeminiService {
             {
               parts: [
                 {
-                  text: `You are an expert travel agent AI. Provide helpful, detailed, and personalized travel advice based on user queries. Be conversational and friendly.
+                  text: `You are an expert travel agent AI. Provide helpful, detailed, and personalized travel advice based on user queries. Organize your response with clear headings and bullet points when appropriate. Be conversational and friendly.
                   
                   User query: ${prompt}`
                 }
@@ -41,7 +40,7 @@ class GeminiService {
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 2048,
           },
         }),
       });
@@ -107,6 +106,60 @@ Would you like more specific information about any of these places or aspects of
 5. Costa Rica: Perfect if you want beaches plus adventure activities like zip-lining and hiking. The dry season is December to April.
 
 All these destinations offer different experiences at various price points. What's your budget and what kind of activities are you interested in besides beach relaxation?`;
+    } else if (promptLower.includes('plan') || promptLower.includes('itinerary')) {
+      return `# Your Personalized Travel Plan
+
+## Transportation Options
+- **Flight**: Round-trip economy flights average $800-1200 per person
+- **Local Transport**: Consider purchasing a transit pass for $25/day for unlimited travel
+- **Private Transfers**: Available from the airport for approximately $60
+
+## Recommended Accommodations
+- **Boutique Hotel**: $150-200/night in the city center
+- **Vacation Rental**: $120-180/night, good for longer stays
+- **Luxury Option**: 4-5 star hotels available from $250/night
+
+## Must-See Attractions
+- Historical landmarks and architectural marvels
+- Local museums and cultural centers
+- Natural parks and scenic viewpoints
+- Authentic local markets
+
+## Daily Itinerary
+### Day 1: Arrival & Orientation
+- Morning: Airport arrival, transfer to accommodation
+- Afternoon: Light exploration of the surrounding neighborhood
+- Evening: Welcome dinner at a local restaurant
+
+### Day 2-5: Exploration Days
+- Balanced mix of popular attractions and hidden gems
+- Free time built in for spontaneous discoveries
+- Optional guided tours available
+
+### Final Day: Departure
+- Time for last-minute shopping
+- Comfortable transfer to the airport
+
+## Local Food Recommendations
+- Traditional dishes to try: [based on destination]
+- Best areas for authentic dining experiences
+- Estimated meal costs: $15-25 per person per meal
+
+## Estimated Total Budget Breakdown
+- Transportation: 25% of budget
+- Accommodation: 30-40% of budget
+- Food & Dining: 15-20% of budget
+- Activities & Attractions: 10-15% of budget
+- Shopping & Souvenirs: 5-10% of budget
+- Emergency Fund: 10% of budget (recommended)
+
+## Travel Tips
+- Best time to visit for optimal weather and fewer crowds
+- Local customs and etiquette to be aware of
+- Safety recommendations specific to the region
+- Currency and payment methods accepted
+
+Would you like me to customize any part of this plan further based on your preferences?`;
     } else {
       return `Thank you for your travel inquiry! I'd be happy to help you plan the perfect trip.
 

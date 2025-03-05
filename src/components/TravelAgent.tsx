@@ -1,13 +1,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Key, AlertCircle, Loader2 } from 'lucide-react';
+import { Key, AlertCircle, Loader2, MapPin, Calendar, Users, Wallet, Tags } from 'lucide-react';
 import { geminiService } from '@/utils/geminiService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ChatInterface from './ChatInterface';
 import TripSuggestion from './TripSuggestion';
 import { useToast } from '@/components/ui/use-toast';
+
+interface TravelFormData {
+  source: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  budget: string;
+  travelers: string;
+  interests: string;
+}
 
 const TravelAgent: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
@@ -15,6 +27,16 @@ const TravelAgent: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [formData, setFormData] = useState<TravelFormData>({
+    source: '',
+    destination: '',
+    startDate: '',
+    endDate: '',
+    budget: '',
+    travelers: '1',
+    interests: ''
+  });
+  const [formSubmitted, setFormSubmitted] = useState<boolean>(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -72,24 +94,136 @@ const TravelAgent: React.FC = () => {
     setShowApiKeyInput(false);
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    const requiredFields = ['source', 'destination', 'startDate', 'endDate', 'budget'];
+    const emptyFields = requiredFields.filter(field => !formData[field as keyof TravelFormData]);
+    
+    if (emptyFields.length > 0) {
+      toast({
+        title: "Missing Information",
+        description: `Please fill in the following fields: ${emptyFields.join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    // Format the travel request for Gemini
+    const travelQuery = `
+      Create a detailed travel plan with the following requirements:
+      - Starting from: ${formData.source}
+      - Destination: ${formData.destination}
+      - Travel dates: ${formData.startDate} to ${formData.endDate}
+      - Budget: ${formData.budget}
+      - Number of travelers: ${formData.travelers}
+      - Interests: ${formData.interests || 'General sightseeing'}
+      
+      Please include:
+      1. Transportation options and estimated costs
+      2. Recommended accommodations
+      3. Must-see attractions and activities
+      4. Daily itinerary
+      5. Local food recommendations
+      6. Estimated total cost breakdown
+      7. Travel tips specific to the destination
+    `;
+    
+    try {
+      const response = await geminiService.generateTravelPlan(travelQuery);
+      
+      // Create a mock suggestion to display alongside the AI response
+      if (formData.destination) {
+        const destinations = ['paris', 'japan', 'tokyo', 'bali', 'hawaii', 'maldives', 'italy', 'greece'];
+        const destinationLower = formData.destination.toLowerCase();
+        
+        const matchedDestination = destinations.find(dest => destinationLower.includes(dest));
+        
+        if (matchedDestination) {
+          const newSuggestion = createSuggestionForDestination(matchedDestination);
+          setSuggestions([newSuggestion]);
+        } else {
+          // Create a generic suggestion
+          setSuggestions([{
+            destination: formData.destination,
+            description: `Explore the wonders of ${formData.destination} based on your travel preferences.`,
+            duration: `${getDaysBetween(formData.startDate, formData.endDate)} days`,
+            whenToGo: getSeasonFromDates(formData.startDate),
+            forWhom: formData.travelers === '1' ? 'Solo traveler' : 'Group of ' + formData.travelers,
+            imageUrl: 'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'
+          }]);
+        }
+      }
+      
+      setFormSubmitted(true);
+    } catch (error) {
+      console.error('Error generating travel plan:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate your travel plan. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDaysBetween = (startDate: string, endDate: string): number => {
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays || 7; // Default to 7 if calculation fails
+    } catch {
+      return 7;
+    }
+  };
+
+  const getSeasonFromDates = (dateStr: string): string => {
+    try {
+      const date = new Date(dateStr);
+      const month = date.getMonth();
+      
+      if (month >= 2 && month <= 4) return 'Spring';
+      if (month >= 5 && month <= 7) return 'Summer';
+      if (month >= 8 && month <= 10) return 'Fall';
+      return 'Winter';
+    } catch {
+      return 'Year-round';
+    }
+  };
+
   const handleSendMessage = async (message: string): Promise<string> => {
     setIsLoading(true);
     
     try {
-      const response = await geminiService.generateTravelPlan(message);
+      // Append the context of the travel details to follow-up questions
+      let contextEnhancedMessage = message;
       
-      // Check if the message is asking about a specific destination
-      const destinations = ['paris', 'japan', 'tokyo', 'bali', 'hawaii', 'maldives', 'italy', 'greece'];
-      const messageLower = message.toLowerCase();
-      
-      const matchedDestination = destinations.find(dest => messageLower.includes(dest));
-      
-      if (matchedDestination) {
-        // Create a suggestion based on the matched destination
-        const newSuggestion = createSuggestionForDestination(matchedDestination);
-        setSuggestions([newSuggestion]);
+      if (formSubmitted) {
+        contextEnhancedMessage = `
+          Regarding my trip from ${formData.source} to ${formData.destination} 
+          (${formData.startDate} to ${formData.endDate}, budget: ${formData.budget}), 
+          with ${formData.travelers} traveler(s) interested in ${formData.interests || 'general sightseeing'}:
+          
+          ${message}
+        `;
       }
       
+      const response = await geminiService.generateTravelPlan(contextEnhancedMessage);
       return response;
     } catch (error) {
       console.error('Error generating travel plan:', error);
@@ -104,9 +238,9 @@ const TravelAgent: React.FC = () => {
       paris: {
         destination: 'Paris, France',
         description: 'Experience the romance and charm of the City of Light with its iconic landmarks, world-class museums, and exquisite cuisine.',
-        duration: '5-7 days',
-        whenToGo: 'April-June, Sept-Oct',
-        forWhom: 'Couples, Art Lovers',
+        duration: getDaysBetween(formData.startDate, formData.endDate) + ' days',
+        whenToGo: getSeasonFromDates(formData.startDate),
+        forWhom: formData.travelers === '1' ? 'Solo traveler' : 'Group of ' + formData.travelers,
         imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'
       },
       japan: {
@@ -233,16 +367,153 @@ const TravelAgent: React.FC = () => {
         </motion.div>
       ) : (
         <div className="space-y-10">
-          <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
+          {!formSubmitted ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              id="travel-form"
+              className="w-full glass-card p-6 rounded-xl"
+            >
+              <h2 className="text-xl font-semibold text-travel-800 mb-6">Plan Your Perfect Trip</h2>
+              
+              <form onSubmit={handleFormSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <MapPin size={16} className="mr-2 text-travel-600" />
+                      Starting Location
+                    </label>
+                    <Input
+                      name="source"
+                      value={formData.source}
+                      onChange={handleInputChange}
+                      placeholder="e.g., New York, USA"
+                      className="bg-white/70 border-travel-300"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <MapPin size={16} className="mr-2 text-travel-600" />
+                      Destination
+                    </label>
+                    <Input
+                      name="destination"
+                      value={formData.destination}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Paris, France"
+                      className="bg-white/70 border-travel-300"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <Calendar size={16} className="mr-2 text-travel-600" />
+                      Start Date
+                    </label>
+                    <Input
+                      type="date"
+                      name="startDate"
+                      value={formData.startDate}
+                      onChange={handleInputChange}
+                      className="bg-white/70 border-travel-300"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <Calendar size={16} className="mr-2 text-travel-600" />
+                      End Date
+                    </label>
+                    <Input
+                      type="date"
+                      name="endDate"
+                      value={formData.endDate}
+                      onChange={handleInputChange}
+                      className="bg-white/70 border-travel-300"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <Wallet size={16} className="mr-2 text-travel-600" />
+                      Budget
+                    </label>
+                    <Input
+                      name="budget"
+                      value={formData.budget}
+                      onChange={handleInputChange}
+                      placeholder="e.g., $3000 USD"
+                      className="bg-white/70 border-travel-300"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <Users size={16} className="mr-2 text-travel-600" />
+                      Number of Travelers
+                    </label>
+                    <Select
+                      value={formData.travelers}
+                      onValueChange={(value) => handleSelectChange('travelers', value)}
+                    >
+                      <SelectTrigger className="bg-white/70 border-travel-300">
+                        <SelectValue placeholder="Select number of travelers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {num === 1 ? 'traveler' : 'travelers'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-travel-700 flex items-center">
+                      <Tags size={16} className="mr-2 text-travel-600" />
+                      Interests
+                    </label>
+                    <Textarea
+                      name="interests"
+                      value={formData.interests}
+                      onChange={handleInputChange}
+                      placeholder="e.g., historical sites, local cuisine, outdoor activities, museums, photography"
+                      className="bg-white/70 border-travel-300 resize-none"
+                    />
+                  </div>
+                </div>
+                
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-travel-600 hover:bg-travel-700 text-white"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      Generating Your Travel Plan...
+                    </>
+                  ) : (
+                    'Create My Travel Plan'
+                  )}
+                </Button>
+              </form>
+            </motion.div>
+          ) : (
+            <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
+          )}
           
-          {suggestions.length > 0 && (
+          {suggestions.length > 0 && formSubmitted && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
               className="space-y-4"
             >
-              <h2 className="text-xl font-semibold text-travel-800">Suggested Destinations</h2>
+              <h2 className="text-xl font-semibold text-travel-800">Your Trip Summary</h2>
               <div className="grid grid-cols-1 gap-6">
                 {suggestions.map((suggestion, index) => (
                   <TripSuggestion key={index} {...suggestion} />
