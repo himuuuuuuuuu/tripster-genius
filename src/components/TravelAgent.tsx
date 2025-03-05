@@ -1,15 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Key, AlertCircle, Loader2, MapPin, Calendar, Users, Wallet, Tags } from 'lucide-react';
+import { Key, AlertCircle, Loader2, MapPin, Calendar, Users, Wallet, Tags, Plane } from 'lucide-react';
 import { geminiService } from '@/utils/geminiService';
+import { flightService } from '@/utils/flightService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import ChatInterface from './ChatInterface';
 import TripSuggestion from './TripSuggestion';
+import FlightOptions from './FlightOptions';
 import { useToast } from '@/components/ui/use-toast';
+import { FlightOption } from '@/types/flight';
 
 interface TravelFormData {
   source: string;
@@ -19,14 +22,17 @@ interface TravelFormData {
   budget: string;
   travelers: string;
   interests: string;
+  includeFlights: boolean;
 }
 
 const TravelAgent: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [isConfiguring, setIsConfiguring] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoadingFlights, setIsLoadingFlights] = useState<boolean>(false);
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [flights, setFlights] = useState<FlightOption[]>([]);
   const [formData, setFormData] = useState<TravelFormData>({
     source: '',
     destination: '',
@@ -34,7 +40,8 @@ const TravelAgent: React.FC = () => {
     endDate: '',
     budget: '',
     travelers: '1',
-    interests: ''
+    interests: '',
+    includeFlights: false
   });
   const [formSubmitted, setFormSubmitted] = useState<boolean>(false);
   const { toast } = useToast();
@@ -103,6 +110,35 @@ const TravelAgent: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleCheckboxChange = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, includeFlights: checked }));
+  };
+
+  const fetchFlights = async () => {
+    if (!formData.source || !formData.destination || !formData.startDate) {
+      return;
+    }
+
+    setIsLoadingFlights(true);
+    try {
+      const flightData = await flightService.getFlights(
+        formData.source,
+        formData.destination,
+        formData.startDate
+      );
+      setFlights(flightData.best_flights);
+    } catch (error) {
+      console.error('Error fetching flights:', error);
+      toast({
+        title: "Flight Search Error",
+        description: "There was a problem searching for flights. Using mock data instead.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingFlights(false);
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -120,6 +156,11 @@ const TravelAgent: React.FC = () => {
     }
     
     setIsLoading(true);
+    
+    // If user wants flight information, fetch it
+    if (formData.includeFlights) {
+      await fetchFlights();
+    }
     
     // Format the travel request for Gemini
     const travelQuery = `
@@ -484,6 +525,26 @@ const TravelAgent: React.FC = () => {
                       className="bg-white/70 border-travel-300 resize-none"
                     />
                   </div>
+                  
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="includeFlights" 
+                        checked={formData.includeFlights}
+                        onCheckedChange={handleCheckboxChange}
+                      />
+                      <label
+                        htmlFor="includeFlights"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
+                      >
+                        <Plane size={16} className="mr-2 text-travel-600" />
+                        Include flight options
+                      </label>
+                    </div>
+                    <p className="text-xs text-travel-500 pl-6">
+                      Search for available flights using SerpAPI (currently showing mock data)
+                    </p>
+                  </div>
                 </div>
                 
                 <Button
@@ -503,7 +564,13 @@ const TravelAgent: React.FC = () => {
               </form>
             </motion.div>
           ) : (
-            <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
+            <>
+              <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
+              
+              {formData.includeFlights && (
+                <FlightOptions flights={flights} loading={isLoadingFlights} />
+              )}
+            </>
           )}
           
           {suggestions.length > 0 && formSubmitted && (
